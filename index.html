@@ -692,7 +692,7 @@
         };
 
         const fetchTrending = async (type, countryCode) => {
-            const limit = 5;
+            const limit = type === 'movies' ? 20 : 25;  // Increased limits for more variety
             const getUrl = (cc) => (type === 'movies' ? `https://rss.applemarketingtools.com/api/v2/${cc}/movies/top-movies/${limit}/movies.json` : `https://rss.applemarketingtools.com/api/v2/${cc}/music/most-played/${limit}/songs.json`);
             const fetchWithProxy = async (targetUrl) => {
                 const proxies = [ u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`, u => `https://corsproxy.io/?${encodeURIComponent(u)}` ];
@@ -1687,14 +1687,25 @@
                                 <label className="block text-sm font-bold text-purple-700 mb-2 flex items-center gap-2">
                                     <span>🔒</span> {t.pinLock || "Privacy Lock PIN (Optional)"}
                                 </label>
-                                <input 
-                                    type="password" 
-                                    maxLength="4"
-                                    value={pin} 
-                                    onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-                                    placeholder="Enter 4-digit PIN"
-                                    className="w-full px-4 py-2 rounded-xl border-2 border-purple-200 focus:border-purple-400 outline-none font-bold text-slate-700 text-center text-2xl tracking-widest"
-                                />
+                                <div className="flex gap-2">
+                                    <input 
+                                        type="password" 
+                                        maxLength="4"
+                                        value={pin} 
+                                        onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+                                        placeholder="Enter 4-digit PIN"
+                                        className="flex-1 px-4 py-2 rounded-xl border-2 border-purple-200 focus:border-purple-400 outline-none font-bold text-slate-700 text-center text-2xl tracking-widest"
+                                    />
+                                    {pin && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setPin('')}
+                                            className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-xl font-bold text-sm transition-colors border-2 border-red-200"
+                                        >
+                                            ✕ Clear
+                                        </button>
+                                    )}
+                                </div>
                                 <p className="text-xs text-slate-600 mt-2">
                                     {t.pinHelper || "💡 Set a 4-digit PIN to lock your diary. Leave empty to disable lock."}
                                 </p>
@@ -1706,6 +1717,11 @@
                                 {pin && pin.length === 4 && (
                                     <p className="text-xs text-green-600 mt-1 font-bold">
                                         {t.pinReady || "✅ PIN ready! Your diary will be locked."}
+                                    </p>
+                                )}
+                                {!pin && localStorage.getItem('vibevault_pin_hash') && (
+                                    <p className="text-xs text-blue-600 mt-1 font-bold">
+                                        ℹ️ PIN is currently active. Clear and save to remove lock.
                                     </p>
                                 )}
                             </div>
@@ -1990,7 +2006,7 @@
                         hasLoadedInitial.current = true;
                         setTrendingLoading(true);
                         fetchTrending(config.id, getCountryCode(userProfile?.location)).then(d => {
-                            setTrending(d.slice(0, 5));
+                            setTrending(d.slice(0, 8));  // Show 8 items initially instead of 5
                             setTrendingLoading(false);
                         }).catch(() => {
                             setTrendingLoading(false);
@@ -2004,16 +2020,18 @@
             
             const loadMoreTrending = async () => {
                 setTrendingLoading(true);
-                const newOffset = trendingOffset + 5;
+                const newOffset = trendingOffset + 8;  // Changed from 5 to 8
                 const allResults = await fetchTrending(config.id, getCountryCode(userProfile?.location));
-                const newBatch = allResults.slice(newOffset, newOffset + 5);
+                const newBatch = allResults.slice(newOffset, newOffset + 8);  // Show 8 at a time
                 
                 if (newBatch.length > 0) {
                     setTrending(newBatch);
                     setTrendingOffset(newOffset);
                 } else {
-                    // No more content - keep current recommendations
-                    alert('No more recommendations available. Click Refresh to see the first batch again.');
+                    // Loop back to start
+                    setTrendingOffset(0);
+                    setTrending(allResults.slice(0, 8));
+                    alert('🔄 Showing first recommendations again!');
                 }
                 setTrendingLoading(false);
             };
@@ -2022,7 +2040,7 @@
                 setTrendingLoading(true);
                 setTrendingOffset(0);
                 const allResults = await fetchTrending(config.id, getCountryCode(userProfile?.location));
-                setTrending(allResults.slice(0, 5));
+                setTrending(allResults.slice(0, 8));  // Show 8 items
                 setTrendingLoading(false);
             };
 
@@ -2264,7 +2282,7 @@
                             >
                                 <IconDownload className="w-4 h-4" /> {exporting ? (t.exporting || 'Exporting...') : (t.downloadSnapshot || '📸 Download Snapshot')}
                             </button>
-                            <div className="flex-1 min-h-0 flex flex-col"><h3 className="text-xs font-bold text-indigo-900 uppercase tracking-wider mb-3 hidden md:block opacity-70">{t.legend}</h3><div className="flex flex-row md:flex-col gap-3 overflow-x-auto md:overflow-visible pb-2 md:pb-0 no-scrollbar items-center md:items-stretch">{config.levels.map((level) => { const isActive = activePaintValue === level.value; return (<div key={level.value} className={`flex items-center gap-3 p-2 rounded-2xl border cursor-pointer transition-all flex-shrink-0 min-w-[140px] md:min-w-0 select-none ${isActive ? 'bg-white border-indigo-500 ring-2 ring-indigo-200 shadow-lg transform scale-105' : 'bg-white/80 border-transparent hover:bg-white hover:shadow-md'}`} onClick={() => handlePaintValueSelect(level.value)} onPointerDown={(e) => { e.stopPropagation(); handlePaintValueSelect(level.value); }}><div className="w-10 h-10 rounded-xl shadow-inner flex items-center justify-center group relative overflow-hidden border-2 border-white/50" style={{ backgroundColor: colors[level.value]||level.defaultColor }}><button onClick={(e) => { e.stopPropagation(); setEditingColorLevel({ value: level.value, label: level.label }); }} className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><IconSettings className="w-5 h-5 text-white" /></button></div><div className="flex flex-col"><span className={`text-sm font-bold ${isActive ? 'text-indigo-700' : 'text-slate-700'}`}>{level.label}</span></div></div>);})}</div></div>
+                            <div className="flex-1 min-h-0 flex flex-col"><h3 className="text-xs font-bold text-indigo-900 uppercase tracking-wider mb-3 hidden md:block opacity-70">{t.legend}</h3><div className="flex flex-row md:flex-col gap-3 overflow-x-auto md:overflow-visible pb-2 md:pb-0 no-scrollbar items-center md:items-stretch">{config.levels.map((level) => { const isActive = activePaintValue === level.value; return (<div key={level.value} className={`flex items-center gap-3 p-2 rounded-2xl border cursor-pointer transition-all flex-shrink-0 min-w-[140px] md:min-w-0 select-none ${isActive ? 'bg-white border-indigo-500 ring-2 ring-indigo-200 shadow-lg transform scale-105' : 'bg-white/80 border-transparent hover:bg-white hover:shadow-md'}`} onClick={() => handlePaintValueSelect(level.value)} onTouchEnd={(e) => { e.preventDefault(); handlePaintValueSelect(level.value); }} onPointerDown={(e) => { e.stopPropagation(); handlePaintValueSelect(level.value); }}><div className="w-10 h-10 rounded-xl shadow-inner flex items-center justify-center group relative overflow-hidden border-2 border-white/50" style={{ backgroundColor: colors[level.value]||level.defaultColor }}><button onClick={(e) => { e.stopPropagation(); setEditingColorLevel({ value: level.value, label: level.label }); }} className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><IconSettings className="w-5 h-5 text-white" /></button></div><div className="flex flex-col"><span className={`text-sm font-bold ${isActive ? 'text-indigo-700' : 'text-slate-700'}`}>{level.label}</span></div></div>);})}</div></div>
                         </div>
                         <div className="flex-1 overflow-auto p-2 md:p-8 touch-pan-x touch-pan-y">
                             <div ref={gridRef} className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-lg border border-white/50 p-4 md:p-6 overflow-x-auto min-w-fit mx-auto">
@@ -2316,6 +2334,28 @@
           const saveTimeoutRef = useRef(null);
           const { saveData, subscribeToData, clearData } = useDataPersistence();
           const theme = THEMES[userProfile?.theme || 'playful'];
+          
+          // Page theme functions (per-tracker customization)
+          const getPageTheme = () => {
+              const pageTheme = userProfile?.pageThemes?.[trackerId];
+              if (!pageTheme) return theme.bg;
+              if (pageTheme.type === 'preset') return pageTheme.bg;
+              if (pageTheme.type === 'image') return '';
+              return theme.bg;
+          };
+          
+          const getPageStyle = () => {
+              const pageTheme = userProfile?.pageThemes?.[trackerId];
+              if (pageTheme?.type === 'image') {
+                  return {
+                      backgroundImage: `url(${pageTheme.url})`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                      backgroundAttachment: 'fixed'
+                  };
+              }
+              return {};
+          };
 
           // --- Restored Navigation Logic ---
           const currentIndex = TRACKER_ORDER.indexOf(trackerId);
@@ -2406,7 +2446,7 @@
           if (loading) return <div className="min-h-screen flex items-center justify-center text-slate-500 font-bold animate-pulse">Loading...</div>;
 
           return (
-            <div className={`min-h-screen flex flex-col font-sans ${theme.bg}`}>
+            <div className={`min-h-screen flex flex-col font-sans ${getPageTheme()} transition-colors duration-500`} style={getPageStyle()}>
               <TrackerHeader 
                 config={config} 
                 onBack={() => onNavigate('landing')} 
